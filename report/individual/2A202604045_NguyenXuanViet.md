@@ -56,9 +56,9 @@ Hướng sửa nếu làm rework: sửa 113 box nhầm lớp (F1 ước tính �
 
 ## 5. Kết quả YOLO
 
-- Runtime: Google Colab, GPU (`device: "0"`), train xong 50 epoch trong ≈ 77 giây. Phiên bản Ultralytics/Torch: **[CẦN ĐIỀN: xem dòng đầu log cell cài đặt/train trên Colab]**.
+- Runtime, GPU/CPU, phiên bản Ultralytics và Torch: Colab T40
 - Tham số: `model=yolo26n.pt`, `epochs=50`, `imgsz=640`, `batch=-1` (auto), `seed=20260909`, `patience=100` (xem `args.yaml`). Không đổi so với notebook gốc.
-- Best checkpoint trong phiên chạy: `/content/Day2-Lab/outputs/yolo26_runs/vehicle_annotation/weights/best.pt` (không đưa file `.pt` vào repo). Theo `results.csv`, best rơi vào epoch 2 (mAP50 0.272, mAP50–95 0.199); các epoch sau dao động 0.17–0.26 mà không vượt được.
+- Best checkpoint trong phiên chạy: `/content/Day2-Lab/outputs/yolo26_runs/vehicle_annotation/weights/best.pt`
 
 | Chỉ số trên 10 ảnh eval | Giá trị |
 |---|---:|
@@ -73,11 +73,14 @@ Ghi chú khi đọc confusion matrix: hàng là Predicted, cột là True. Cột
 
 Trả lời bốn câu hỏi cuối notebook:
 
-1. **Lớp recall thấp nhất:** `van`, recall 0/12. Ví dụ `drive_052`: chiếc xe buýt hai tầng ở giữa ảnh có nhãn eval là `van` (dòng `3 0.427 0.534 0.207 0.655` trong `dataset/labels/eval/drive_052.txt`) nhưng model dự đoán `bus` 0.49; `drive_053`: xe buýt lớn màu trắng-xanh cũng có nhãn `van`, model dự đoán `bus` 0.85. Bằng mắt, cả hai xe đều là xe buýt nên dự đoán của model hợp lý theo định nghĩa `bus` của schema; nó chỉ bị tính là bỏ sót `van` vì nhãn gold ghi `van`. Tiếp theo là `truck` (1/5, 4 box bị gọi là `car`, ví dụ `drive_059` phía trên bên trái). `bus` chỉ có 2 box trong eval nên con số này ít tin cậy.
-2. **mAP50 cao nhưng mAP50–95 thấp** nghĩa là model tìm đúng vật nhưng box không khít ở IoU cao, nên cần kiểm tra độ chặt cạnh box, box lấn nền hoặc gộp xe, xe bị che/cắt rìa, và nhãn eval có cùng chuẩn với nhãn train hay không. Trường hợp của tôi khác: mAP50 0.271 và mAP50–95 0.200 chỉ chênh khoảng 26%, và mean IoU của nhãn train với gold là 0.85, nên box không phải điểm nghẽn chính. Mức mAP thấp đến chủ yếu từ lớp (nhầm lớp và recall thấp) và từ việc chỉ train 50 ảnh.
-3. **Lỗi class liên quan guideline:** toàn bộ 12 box `van` của eval bị dự đoán thành `bus` (11) hoặc bỏ sót (1). Dữ kiện hỗ trợ: khi chấm nhãn train với gold (mục 4), tôi đã gán `bus` cho 52 box mà gold ghi `van`; model học đúng thói quen đó của tôi, nên lặp lại lỗi trên eval. Cần phân biệt hai trường hợp. Với xe buýt lớn như `drive_052`, `drive_053`, định nghĩa `bus` trong `GUIDELINE_MINI.md` ("xe buýt thành phố, xe khách") khớp schema của README, nhưng gold lại ghi `van`; đây là chỗ nhãn gold và schema lệch nhau, guideline của tôi không sai theo chữ nhưng chưa ghi lại ca mơ hồ `bus`/`van` này để hỏi giảng viên (như chính guideline đã tự đặt ra). Với xe con bị dự đoán `van` ở `drive_056`, `drive_060`, ranh giới `car`/`van` mới thực sự chưa rõ. Tương tự, 14 box tôi gán `car` mà gold là `truck` giải thích vì sao 4/5 `truck` eval bị gọi là `car`.
-4. **Vì sao không train bằng 10 ảnh eval:** nếu train trên eval thì chỉ số đo khả năng ghi nhớ chứ không phải tổng quát hóa, và bị thổi phồng. Trong notebook, 10 ảnh này đóng vai validation (chọn best checkpoint theo mAP mỗi epoch) và đánh giá cuối. Hệ quả: vì val và eval là cùng một tập, chỉ số cuối không hoàn toàn độc lập, và với 10 ảnh thì chỉ số dao động lớn giữa các epoch (mAP50 0.17–0.27), nên best epoch 2 chủ yếu là may rủi.
-
+1. Lớp nào có recall thấp nhất? Chỉ ra một ảnh eval minh họa.
+van, ở ảnh drive_057,jpg, xe van màu trắng bị nhận diện là car
+2. Nếu mAP50 cao nhưng mAP50-95 thấp, box đang gặp vấn đề gì? 
+chủ yếu do nhầm lớp
+3. Có lỗi `truck`/`bus`/`van`/`car` nào liên quan tới guideline không?
+không
+4. Vì sao không dùng 10 ảnh eval để train dù chúng có nhãn?
+Nếu train bằng 10 ảnh eval thì model sẽ học thuộc chúng, điểm đánh giá bị thổi phồng không thể làm đánh giá.
 ## 6. Khó khăn và cách xử lý
 
 | Bước/thời điểm | Lỗi quan sát | Cách đã thử | Kết quả/còn thiếu |
@@ -96,5 +99,5 @@ Trả lời bốn câu hỏi cuối notebook:
 
 ## 8. Công cụ AI và tài liệu tham khảo
 
-- Dùng Claude Code để đối chiếu nhãn với gold (script phân tích lỗi lớp/kích thước) và soạn báo cáo này; các số liệu mục 4 lấy từ `tools/evaluate_annotations.py` và script đối chiếu, tôi đã đọc lại kết quả. **[Bổ sung nếu bạn dùng AI/nguồn khác ở bước khác]**
+- Dùng Claude Code để đối chiếu nhãn với gold (script phân tích lỗi lớp/kích thước) và soạn báo cáo này; các số liệu mục 4 lấy từ `tools/evaluate_annotations.py` và script đối chiếu, tôi đã đọc lại kết quả.
 - Nguồn ngoài repo: không. Không đính kèm gold train, token hay mật khẩu.
